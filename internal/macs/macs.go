@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/auditteam/wifiaudit/internal/oui"
+	ouidb "github.com/auditteam/wifiaudit/internal/oui"
 )
 
 // Entry represents a MAC address entry in a list
@@ -79,7 +79,7 @@ func (m *Manager) Add(listType string, entry Entry) error {
 
 	// Auto-lookup vendor if not set
 	if entry.Vendor == "" {
-		entry.Vendor = oui.Lookup(entry.MAC)
+		entry.Vendor = ouidb.Lookup(entry.MAC)
 	}
 
 	entries = append(entries, entry)
@@ -120,7 +120,7 @@ func (m *Manager) Lookup(mac string) LookupResult {
 	mac = strings.ToUpper(mac)
 	result := LookupResult{
 		MAC:    mac,
-		Vendor: oui.Lookup(mac),
+		Vendor: ouidb.Lookup(mac),
 	}
 
 	for _, listType := range []string{"whitelist", "blacklist", "known", "targets"} {

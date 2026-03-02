@@ -10,7 +10,7 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 
-	"github.com/auditteam/wifiaudit/internal/oui"
+	ouidb "github.com/auditteam/wifiaudit/internal/oui"
 )
 
 // Network represents a discovered access point
@@ -162,7 +162,7 @@ func (s *Scanner) processBeacon(packet gopacket.Packet, dot11 *layers.Dot11) {
 		network = &Network{
 			BSSID:     bssid,
 			FirstSeen: time.Now(),
-			Vendor:    oui.Lookup(bssid),
+			Vendor:    ouidb.Lookup(bssid),
 		}
 		s.networks[bssid] = network
 	}
@@ -204,7 +204,7 @@ func (s *Scanner) processProbeRequest(packet gopacket.Packet, dot11 *layers.Dot1
 	if !exists {
 		client = &Client{
 			MAC:       clientMAC,
-			Vendor:    oui.Lookup(clientMAC),
+			Vendor:    ouidb.Lookup(clientMAC),
 			FirstSeen: time.Now(),
 		}
 		s.clients[clientMAC] = client
@@ -232,7 +232,7 @@ func (s *Scanner) processDataFrame(dot11 *layers.Dot11) {
 			client = &Client{
 				MAC:       src,
 				BSSID:     bssid,
-				Vendor:    oui.Lookup(src),
+				Vendor:    ouidb.Lookup(src),
 				FirstSeen: time.Now(),
 			}
 			s.clients[src] = client
@@ -269,7 +269,7 @@ func (s *Scanner) processClientPacket(packet gopacket.Packet, bssid string) {
 		client = &Client{
 			MAC:       src,
 			BSSID:     bssid,
-			Vendor:    oui.Lookup(src),
+			Vendor:    ouidb.Lookup(src),
 			FirstSeen: time.Now(),
 		}
 		s.clients[src] = client
