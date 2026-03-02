@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"encoding/binary"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
