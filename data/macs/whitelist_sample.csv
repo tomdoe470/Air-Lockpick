@@ -1,5 +1,0 @@
-# Sample whitelist - format: MAC,Label,Notes
-# One entry per line. Lines starting with # are ignored.
-AA:BB:CC:DD:EE:FF,Main Router,Primary AP - authorized
-11:22:33:44:55:66,Access Point 2,Secondary AP - 5GHz
-DE:AD:BE:EF:CA:FE,Authorized Client,CEO Laptop
