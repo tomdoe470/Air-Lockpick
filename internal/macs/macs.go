@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	ouidb "github.com/auditteam/wifiaudit/internal/oui"
 )
 
 // Entry represents a MAC address entry in a list
@@ -77,7 +79,7 @@ func (m *Manager) Add(listType string, entry Entry) error {
 
 	// Auto-lookup vendor if not set
 	if entry.Vendor == "" {
-		entry.Vendor = LookupOUI(entry.MAC)
+		entry.Vendor = ouidb.Lookup(entry.MAC)
 	}
 
 	entries = append(entries, entry)
@@ -118,7 +120,7 @@ func (m *Manager) Lookup(mac string) LookupResult {
 	mac = strings.ToUpper(mac)
 	result := LookupResult{
 		MAC:    mac,
-		Vendor: LookupOUI(mac),
+		Vendor: ouidb.Lookup(mac),
 	}
 
 	for _, listType := range []string{"whitelist", "blacklist", "known", "targets"} {
@@ -242,33 +244,3 @@ func isValidMAC(mac string) bool {
 	return true
 }
 
-// LookupOUI returns vendor name from MAC OUI prefix
-func LookupOUI(mac string) string {
-	// In production: load from full OUI database file
-	// This is a simplified lookup
-	parts := strings.Split(strings.ToUpper(mac), ":")
-	if len(parts) < 3 {
-		return ""
-	}
-	oui := strings.Join(parts[:3], "")
-
-	ouiDB := map[string]string{
-		"001B63": "Apple",
-		"001BB9": "Apple",
-		"0024B2": "Netgear",
-		"686F2D": "TP-Link",
-		"A4C361": "Netgear",
-		"B00CD1": "TP-Link",
-		"C83A35": "Asus",
-		"D850E6": "Asus",
-		"E894F6": "Xiaomi",
-		"FCFBFB": "Ubiquiti",
-		"001A2B": "Cisco",
-		"00E0FC": "Huawei",
-	}
-
-	if vendor, ok := ouiDB[oui]; ok {
-		return vendor
-	}
-	return ""
-}

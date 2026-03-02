@@ -78,7 +78,7 @@ func (c *Capture) CaptureHandshake(bssid, ssid string) (string, error) {
 		}
 
 		// Look for EAPOL (EAP over LAN = WPA handshake)
-		eapol := packet.Layer(layers.LayerTypeEAPoL)
+		eapol := packet.Layer(layers.LayerTypeEAPOL)
 		if eapol != nil {
 			eapolCount++
 			// Determine handshake frame number from EAPOL key info
@@ -166,7 +166,7 @@ func buildDeauthPacket(src, dst, bssid string) []byte {
 }
 
 func detectEAPOLFrame(packet gopacket.Packet) int {
-	eapol := packet.Layer(layers.LayerTypeEAPoL)
+	eapol := packet.Layer(layers.LayerTypeEAPOL)
 	if eapol == nil {
 		return 0
 	}
