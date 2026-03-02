@@ -13,73 +13,48 @@ import (
 	"github.com/auditteam/wifiaudit/internal/scanner"
 )
 
-// ──────────────────────────────────────────────
-//  Colour palette
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
+//  Colours
+// ─────────────────────────────────────────────
 
 var (
-	clrBg      = lipgloss.Color("#0d1117")
-	clrBorder  = lipgloss.Color("#30363d")
-	clrMuted   = lipgloss.Color("#8b949e")
-	clrText    = lipgloss.Color("#c9d1d9")
-	clrAccent  = lipgloss.Color("#58a6ff")
-	clrGreen   = lipgloss.Color("#3fb950")
-	clrYellow  = lipgloss.Color("#d29922")
-	clrOrange  = lipgloss.Color("#db6d28")
-	clrRed     = lipgloss.Color("#f85149")
-	clrPurple  = lipgloss.Color("#bc8cff")
-	clrCyan    = lipgloss.Color("#39d353")
-	clrSelected = lipgloss.Color("#1f6feb")
+	cAccent = lipgloss.Color("#58a6ff")
+	cMuted  = lipgloss.Color("#6e7681")
+	cText   = lipgloss.Color("#c9d1d9")
+	cGreen  = lipgloss.Color("#3fb950")
+	cYellow = lipgloss.Color("#d29922")
+	cOrange = lipgloss.Color("#db6d28")
+	cRed    = lipgloss.Color("#f85149")
+	cCyan   = lipgloss.Color("#39d353")
+	cSel    = lipgloss.Color("#1f6feb")
 )
 
 var (
-	styleTitle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(clrAccent)
+	sTitle = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
+	sMuted = lipgloss.NewStyle().Foreground(cMuted)
+	sText  = lipgloss.NewStyle().Foreground(cText)
+	sHead  = lipgloss.NewStyle().Foreground(cMuted).Bold(true)
+	sSel   = lipgloss.NewStyle().Background(cSel).Foreground(lipgloss.Color("#ffffff")).Bold(true)
+	sSep   = lipgloss.NewStyle().Foreground(cMuted)
 
-	styleMuted = lipgloss.NewStyle().Foreground(clrMuted)
+	sTabOn  = lipgloss.NewStyle().Bold(true).Foreground(cAccent).Underline(true).PaddingLeft(1).PaddingRight(1)
+	sTabOff = lipgloss.NewStyle().Foreground(cMuted).PaddingLeft(1).PaddingRight(1)
 
-	styleText = lipgloss.NewStyle().Foreground(clrText)
-
-	styleSelected = lipgloss.NewStyle().
-			Background(clrSelected).
-			Foreground(lipgloss.Color("#ffffff")).
-			Bold(true)
-
-	styleHeader = lipgloss.NewStyle().
-			Foreground(clrMuted).
-			Bold(true)
-
-	stylePanel = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(clrBorder)
-
-	styleBadgeOPN  = lipgloss.NewStyle().Bold(true).Foreground(clrRed)
-	styleBadgeWEP  = lipgloss.NewStyle().Bold(true).Foreground(clrOrange)
-	styleBadgeWPA  = lipgloss.NewStyle().Bold(true).Foreground(clrYellow)
-	styleBadgeWPA2 = lipgloss.NewStyle().Bold(true).Foreground(clrGreen)
-	styleBadgeWPA3 = lipgloss.NewStyle().Bold(true).Foreground(clrCyan)
-
-	styleTabActive = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(clrAccent).
-			Border(lipgloss.Border{Bottom: "─"}, false, false, true, false).
-			BorderForeground(clrAccent).
-			PaddingLeft(1).PaddingRight(1)
-
-	styleTabInactive = lipgloss.NewStyle().
-				Foreground(clrMuted).
-				PaddingLeft(1).PaddingRight(1)
+	sEncOPN  = lipgloss.NewStyle().Bold(true).Foreground(cRed)
+	sEncWEP  = lipgloss.NewStyle().Bold(true).Foreground(cOrange)
+	sEncWPA  = lipgloss.NewStyle().Bold(true).Foreground(cYellow)
+	sEncWPA2 = lipgloss.NewStyle().Bold(true).Foreground(cGreen)
+	sEncWPA3 = lipgloss.NewStyle().Bold(true).Foreground(cCyan)
 )
 
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
 //  Model
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
 
-type tab int
+type tabID int
 
 const (
-	tabNetworks tab = iota
+	tabNetworks tabID = iota
 	tabClients
 	tabCaptures
 	tabMACs
@@ -91,21 +66,20 @@ type Model struct {
 	mon        *monitor.Manager
 	networks   []scanner.Network
 	clients    []scanner.Client
-	currentTab tab
-	cursor     int // AP list cursor
+	tab        tabID
+	cursor     int
 	width      int
 	height     int
 	scanning   bool
 	status     string
-	statusOK   bool
+	statusErr  bool
 	lastUpdate time.Time
-	err        error
 	spinner    spinner.Model
 }
 
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
 //  Messages
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
 
 type tickMsg time.Time
 type scanStartedMsg struct{}
@@ -115,15 +89,15 @@ func tick() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
 //  Init / Update
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tick(), m.spinner.Tick, m.startScan())
+	return tea.Batch(tick(), m.spinner.Tick, m.cmdStartScan())
 }
 
-func (m Model) startScan() tea.Cmd {
+func (m Model) cmdStartScan() tea.Cmd {
 	return func() tea.Msg {
 		if err := m.mon.Enable(); err != nil {
 			return errMsg(err)
@@ -140,14 +114,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds = append(cmds, spCmd)
 
 	switch msg := msg.(type) {
+
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
+		m.width, m.height = msg.Width, msg.Height
 
 	case scanStartedMsg:
 		m.scanning = true
-		m.status = "Scanning…"
-		m.statusOK = true
+		m.status = "Scanning"
 
 	case tickMsg:
 		if m.scanning {
@@ -158,9 +131,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, tick())
 
 	case errMsg:
-		m.err = msg
+		m.statusErr = true
 		m.status = fmt.Sprintf("Error: %v", msg)
-		m.statusOK = false
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -170,38 +142,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "tab":
-			m.currentTab = (m.currentTab + 1) % 4
+			m.tab = (m.tab + 1) % 4
 			m.cursor = 0
 
 		case "1":
-			m.currentTab = tabNetworks
-			m.cursor = 0
+			m.tab, m.cursor = tabNetworks, 0
 		case "2":
-			m.currentTab = tabClients
-			m.cursor = 0
+			m.tab, m.cursor = tabClients, 0
 		case "3":
-			m.currentTab = tabCaptures
-			m.cursor = 0
+			m.tab, m.cursor = tabCaptures, 0
 		case "4":
-			m.currentTab = tabMACs
-			m.cursor = 0
+			m.tab, m.cursor = tabMACs, 0
 
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
 			}
 		case "down", "j":
-			maxIdx := m.listLen() - 1
-			if m.cursor < maxIdx {
+			if n := m.listLen(); m.cursor < n-1 {
 				m.cursor++
 			}
 		}
 	}
+
 	return m, tea.Batch(cmds...)
 }
 
 func (m Model) listLen() int {
-	switch m.currentTab {
+	switch m.tab {
 	case tabNetworks:
 		return len(m.networks)
 	case tabClients:
@@ -210,118 +178,150 @@ func (m Model) listLen() int {
 	return 0
 }
 
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
 //  View
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
 
 func (m Model) View() string {
 	if m.width == 0 {
 		return "Loading…"
 	}
-
-	var sb strings.Builder
-
-	// ── Header ──────────────────────────────────
-	sb.WriteString(m.renderHeader())
-	sb.WriteString("\n")
-
-	// ── Tabs ────────────────────────────────────
-	sb.WriteString(m.renderTabs())
-	sb.WriteString("\n\n")
-
-	// ── Body ────────────────────────────────────
-	switch m.currentTab {
-	case tabNetworks:
-		sb.WriteString(m.renderNetworksPanel())
-	case tabClients:
-		sb.WriteString(m.renderClientsPanel())
-	case tabCaptures:
-		sb.WriteString(styleMuted.Render("  No captures yet. Use: wifiaudit capture handshake --bssid <BSSID> --channel <CH>"))
-	case tabMACs:
-		sb.WriteString(styleMuted.Render("  MAC management. Use: wifiaudit mac list/add/remove/lookup"))
+	w := m.width
+	lines := []string{
+		m.viewHeader(w),
+		"",
+		m.viewTabs(),
+		"",
 	}
 
-	// ── Status bar ──────────────────────────────
-	sb.WriteString("\n\n")
-	sb.WriteString(m.renderStatusBar())
+	switch m.tab {
+	case tabNetworks:
+		lines = append(lines, m.viewNetworks(w)...)
+	case tabClients:
+		lines = append(lines, m.viewAllClients(w)...)
+	case tabCaptures:
+		lines = append(lines,
+			sMuted.Render("  No captures yet."),
+			sMuted.Render("  Use: air-lockpick capture handshake --bssid <BSSID> --channel <CH>"),
+		)
+	case tabMACs:
+		lines = append(lines,
+			sMuted.Render("  MAC list management."),
+			sMuted.Render("  Use: air-lockpick mac list / add / remove / lookup"),
+		)
+	}
 
-	return sb.String()
+	// pad to fill height, push status bar to bottom
+	body := strings.Join(lines, "\n")
+	bodyH := lipgloss.Height(body)
+	padH := m.height - bodyH - 2
+	if padH > 0 {
+		body += strings.Repeat("\n", padH)
+	}
+
+	return body + "\n" + m.viewStatusBar(w)
 }
 
-// ── Header ──────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+//  Header
+// ─────────────────────────────────────────────
 
-func (m Model) renderHeader() string {
-	title := styleTitle.Render("✦ AIR-LOCKPICK")
+func (m Model) viewHeader(w int) string {
+	spin := ""
+	if m.scanning {
+		spin = m.spinner.View() + " "
+	}
 
-	stats := styleMuted.Render(fmt.Sprintf(
-		"iface: %s   nets: %d   clients: %d   updated: %s",
+	left := sTitle.Render("✦ AIR-LOCKPICK")
+	right := sMuted.Render(fmt.Sprintf(
+		"%s%s  │  nets: %d  │  clients: %d  │  %s",
+		spin,
 		m.iface,
 		len(m.networks),
 		len(m.clients),
 		m.lastUpdate.Format("15:04:05"),
 	))
 
-	gap := m.width - lipgloss.Width(title) - lipgloss.Width(stats) - 2
+	gap := w - lipgloss.Width(left) - lipgloss.Width(right) - 2
 	if gap < 1 {
 		gap = 1
 	}
-	return title + strings.Repeat(" ", gap) + stats
+	bar := left + strings.Repeat(" ", gap) + right
+	sep := sSep.Render(strings.Repeat("─", w))
+	return bar + "\n" + sep
 }
 
-// ── Tabs ────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+//  Tab bar
+// ─────────────────────────────────────────────
 
-func (m Model) renderTabs() string {
-	labels := []string{"[1] Networks", "[2] Clients", "[3] Captures", "[4] MACs"}
+func (m Model) viewTabs() string {
+	tabs := []struct {
+		id  tabID
+		lbl string
+	}{
+		{tabNetworks, "1 Networks"},
+		{tabClients, "2 Clients"},
+		{tabCaptures, "3 Captures"},
+		{tabMACs, "4 MACs"},
+	}
 	var parts []string
-	for i, lbl := range labels {
-		if tab(i) == m.currentTab {
-			parts = append(parts, styleTabActive.Render(lbl))
+	for _, t := range tabs {
+		if t.id == m.tab {
+			parts = append(parts, sTabOn.Render(t.lbl))
 		} else {
-			parts = append(parts, styleTabInactive.Render(lbl))
+			parts = append(parts, sTabOff.Render(t.lbl))
 		}
 	}
-	return strings.Join(parts, "  ")
+	return " " + strings.Join(parts, "  ")
 }
 
-// ── Networks panel (split-view) ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+//  Networks tab (AP table + clients section)
+// ─────────────────────────────────────────────
 
-func (m Model) renderNetworksPanel() string {
-	leftW := 52
-	rightW := m.width - leftW - 5
-	if rightW < 30 {
-		rightW = 30
+const (
+	colBSSID  = 19
+	colCH     = 4
+	colSIG    = 7
+	colENC    = 5
+	colCIPHER = 7
+)
+
+func (m Model) viewNetworks(w int) []string {
+	ssidW := w - colBSSID - colCH - colSIG - colENC - colCIPHER - 7
+	if ssidW < 10 {
+		ssidW = 10
 	}
 
-	left := m.renderAPList(leftW)
-	right := m.renderAPDetail(rightW)
+	hdr := sHead.Render(fmt.Sprintf(
+		" %-*s  %*s  %-*s  %-*s  %-*s  %-*s",
+		colBSSID, "BSSID",
+		colCH, "CH",
+		colSIG, "SIGNAL",
+		colENC, "ENC",
+		colCIPHER, "CIPHER",
+		ssidW, "SSID",
+	))
+	sep := sSep.Render(" " + strings.Repeat("─", w-2))
 
-	return lipgloss.JoinHorizontal(lipgloss.Top,
-		stylePanel.Width(leftW).Render(left),
-		"  ",
-		stylePanel.Width(rightW).Render(right),
-	)
-}
-
-func (m Model) renderAPList(w int) string {
-	var sb strings.Builder
-
-	hdr := styleHeader.Render(fmt.Sprintf("%-22s %3s  %-5s  %-4s", "SSID", "CH", "SIG", "ENC"))
-	sb.WriteString(hdr + "\n")
-	sb.WriteString(styleHeader.Render(strings.Repeat("─", w)) + "\n")
+	lines := []string{hdr, sep}
 
 	if len(m.networks) == 0 {
+		var msg string
 		if m.scanning {
-			sb.WriteString(styleMuted.Render(
-				fmt.Sprintf("  %s  Scanning…", m.spinner.View())))
+			msg = fmt.Sprintf("  %s  Scanning for networks…", m.spinner.View())
 		} else {
-			sb.WriteString(styleMuted.Render("  No networks found yet"))
+			msg = "  No networks found."
 		}
-		return sb.String()
+		lines = append(lines, sMuted.Render(msg))
+		return lines
 	}
 
-	bodyH := m.height - 12
-	if bodyH < 5 {
-		bodyH = 5
+	// visible window
+	bodyH := m.height - 16
+	if bodyH < 3 {
+		bodyH = 3
 	}
 	start := 0
 	if m.cursor >= bodyH {
@@ -338,13 +338,8 @@ func (m Model) renderAPList(w int) string {
 		if ssid == "" {
 			ssid = "<hidden>"
 		}
-		if len(ssid) > 20 {
-			ssid = ssid[:17] + "…"
-		}
-
-		clientCount := ""
-		if len(n.Clients) > 0 {
-			clientCount = fmt.Sprintf("(%d)", len(n.Clients))
+		if len(ssid) > ssidW {
+			ssid = ssid[:ssidW-1] + "…"
 		}
 
 		cursor := "  "
@@ -352,107 +347,86 @@ func (m Model) renderAPList(w int) string {
 			cursor = "▶ "
 		}
 
-		line := fmt.Sprintf("%s%-20s %3d  %-5s  %s %s",
+		row := fmt.Sprintf("%s%-*s  %*d  %-*s  %-*s  %-*s  %-*s",
 			cursor,
-			ssid,
-			n.Channel,
-			signalBars(n.Signal),
-			encBadge(n.Encryption),
-			styleMuted.Render(clientCount),
+			colBSSID-2, n.BSSID,
+			colCH, n.Channel,
+			colSIG, signalBars(n.Signal),
+			colENC, encTag(n.Encryption),
+			colCIPHER, orDash(n.Cipher),
+			ssidW, ssid,
 		)
 
 		if i == m.cursor {
-			sb.WriteString(styleSelected.Width(w).Render(line) + "\n")
+			lines = append(lines, sSel.Width(w).Render(row))
 		} else {
-			sb.WriteString(encStyle(n.Encryption).Render(line) + "\n")
+			lines = append(lines, sText.Render(row))
 		}
 	}
-	return sb.String()
-}
 
-func (m Model) renderAPDetail(w int) string {
-	if len(m.networks) == 0 {
-		return styleMuted.Render("  Select a network with ↑↓")
-	}
-	if m.cursor >= len(m.networks) {
-		return ""
-	}
+	// ── Selected AP clients ──────────────────
+	lines = append(lines, "")
+	if m.cursor < len(m.networks) {
+		n := m.networks[m.cursor]
+		clientTitle := fmt.Sprintf(" CLIENTS  %s", sText.Render(n.BSSID))
+		if n.SSID != "" {
+			clientTitle += sMuted.Render("  "+n.SSID)
+		}
+		lines = append(lines, sTitle.Render(clientTitle))
+		lines = append(lines, sSep.Render(" "+strings.Repeat("─", w-2)))
 
-	n := m.networks[m.cursor]
-	var sb strings.Builder
-
-	ssid := n.SSID
-	if ssid == "" {
-		ssid = "<hidden>"
-	}
-
-	// ── AP detail block ──────────────────────
-	sb.WriteString(styleTitle.Render("▸ " + ssid) + "\n")
-	sb.WriteString(styleHeader.Render(strings.Repeat("─", w-2)) + "\n")
-
-	field := func(label, value string) string {
-		return styleMuted.Render(fmt.Sprintf("  %-12s", label)) +
-			styleText.Render(value) + "\n"
-	}
-
-	sb.WriteString(field("BSSID", n.BSSID))
-	sb.WriteString(field("Channel", fmt.Sprintf("%d", n.Channel)))
-	sb.WriteString(field("Signal", fmt.Sprintf("%d dBm  %s", n.Signal, signalBars(n.Signal))))
-	sb.WriteString(field("Encryption", encBadgeFull(n.Encryption, n.Cipher)))
-	sb.WriteString(field("Vendor", orDash(n.Vendor)))
-	sb.WriteString(field("Beacons", fmt.Sprintf("%d", n.Beacons)))
-	sb.WriteString(field("First seen", n.FirstSeen.Format("15:04:05")))
-
-	// ── Clients block ────────────────────────
-	sb.WriteString("\n")
-	clientHeader := fmt.Sprintf("  CLIENTS (%d)", len(n.Clients))
-	sb.WriteString(styleTitle.Render(clientHeader) + "\n")
-	sb.WriteString(styleHeader.Render(strings.Repeat("─", w-2)) + "\n")
-
-	if len(n.Clients) == 0 {
-		sb.WriteString(styleMuted.Render("  No clients detected on this AP\n"))
-		sb.WriteString(styleMuted.Render("  Data frames are captured passively\n"))
-	} else {
-		hdr := styleHeader.Render(fmt.Sprintf("  %-19s %-7s %s", "MAC", "SIGNAL", "VENDOR"))
-		sb.WriteString(hdr + "\n")
-		for _, c := range n.Clients {
-			vendor := c.Vendor
-			if vendor == "" {
-				vendor = "Unknown"
+		if len(n.Clients) == 0 {
+			lines = append(lines, sMuted.Render("  No clients detected on this AP yet"))
+		} else {
+			cHdr := sHead.Render(fmt.Sprintf(
+				"  %-19s  %-7s  %s", "STATION", "SIGNAL", "VENDOR"))
+			lines = append(lines, cHdr)
+			for _, c := range n.Clients {
+				vendor := c.Vendor
+				if vendor == "" {
+					vendor = "—"
+				}
+				line := fmt.Sprintf("  %-19s  %-7s  %s",
+					c.MAC, fmt.Sprintf("%ddBm", c.Signal), vendor)
+				lines = append(lines, sText.Render(line))
 			}
-			line := fmt.Sprintf("  %-19s %-7s %s",
-				c.MAC,
-				fmt.Sprintf("%ddBm", c.Signal),
-				vendor,
-			)
-			sb.WriteString(styleText.Render(line) + "\n")
 		}
 	}
 
-	return sb.String()
+	return lines
 }
 
-// ── Clients tab (all clients) ────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+//  Clients tab (all clients)
+// ─────────────────────────────────────────────
 
-func (m Model) renderClientsPanel() string {
-	var sb strings.Builder
+func (m Model) viewAllClients(w int) []string {
+	vendorW := w - 19 - 19 - 8 - 5
+	if vendorW < 10 {
+		vendorW = 10
+	}
+	hdr := sHead.Render(fmt.Sprintf(
+		"  %-19s  %-19s  %-7s  %-*s",
+		"STATION", "AP BSSID", "SIGNAL", vendorW, "VENDOR"))
+	sep := sSep.Render("  " + strings.Repeat("─", w-4))
 
-	hdr := styleHeader.Render(fmt.Sprintf("  %-19s %-18s %-7s %s",
-		"CLIENT MAC", "AP BSSID", "SIGNAL", "VENDOR"))
-	sb.WriteString(hdr + "\n")
-	sb.WriteString(styleHeader.Render("  " + strings.Repeat("─", m.width-4)) + "\n")
+	lines := []string{hdr, sep}
 
 	if len(m.clients) == 0 {
+		var msg string
 		if m.scanning {
-			sb.WriteString(styleMuted.Render(
-				fmt.Sprintf("  %s  Listening for client frames…", m.spinner.View())))
+			msg = fmt.Sprintf("  %s  Listening for client frames…", m.spinner.View())
 		} else {
-			sb.WriteString(styleMuted.Render("  No clients found yet"))
+			msg = "  No clients found."
 		}
-		return sb.String()
+		lines = append(lines, sMuted.Render(msg))
+		return lines
 	}
 
-	bodyH := m.height - 12
+	bodyH := m.height - 10
+	if bodyH < 3 {
+		bodyH = 3
+	}
 	start := 0
 	if m.cursor >= bodyH {
 		start = m.cursor - bodyH + 1
@@ -472,104 +446,89 @@ func (m Model) renderClientsPanel() string {
 		if bssid == "" {
 			bssid = "—"
 		}
-		line := fmt.Sprintf("  %-19s %-18s %-7s %s",
-			c.MAC, bssid, fmt.Sprintf("%ddBm", c.Signal), vendor)
+		row := fmt.Sprintf("  %-19s  %-19s  %-7s  %-*s",
+			c.MAC, bssid, fmt.Sprintf("%ddBm", c.Signal), vendorW, vendor)
 
 		if i == m.cursor {
-			sb.WriteString(styleSelected.Width(m.width - 4).Render(line) + "\n")
+			lines = append(lines, sSel.Width(w).Render(row))
 		} else {
-			sb.WriteString(styleText.Render(line) + "\n")
+			lines = append(lines, sText.Render(row))
 		}
 	}
-	return sb.String()
+	return lines
 }
 
-// ── Status bar ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+//  Status bar
+// ─────────────────────────────────────────────
 
-func (m Model) renderStatusBar() string {
-	var dot string
-	if m.statusOK {
-		dot = lipgloss.NewStyle().Foreground(clrGreen).Render("●")
-	} else {
-		dot = lipgloss.NewStyle().Foreground(clrRed).Render("●")
+func (m Model) viewStatusBar(w int) string {
+	dot := lipgloss.NewStyle().Foreground(cGreen).Render("●")
+	if m.statusErr {
+		dot = lipgloss.NewStyle().Foreground(cRed).Render("●")
 	}
 
-	status := styleMuted.Render(m.status)
-	keys := styleMuted.Render("  q:quit  tab:next-tab  ↑↓/jk:navigate")
+	left := dot + " " + sMuted.Render(m.status)
+	right := sMuted.Render("q:quit  tab/1-4:switch  ↑↓ jk:scroll")
 
-	return dot + " " + status + "   " + keys
+	gap := w - lipgloss.Width(left) - lipgloss.Width(right) - 2
+	if gap < 1 {
+		gap = 1
+	}
+	bar := left + strings.Repeat(" ", gap) + right
+	sep := sSep.Render(strings.Repeat("─", w))
+	return sep + "\n" + bar
 }
 
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
 //  Helpers
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
 
 func signalBars(dbm int) string {
-	var bars int
+	var n int
 	switch {
 	case dbm >= -50:
-		bars = 5
+		n = 5
 	case dbm >= -60:
-		bars = 4
+		n = 4
 	case dbm >= -70:
-		bars = 3
+		n = 3
 	case dbm >= -80:
-		bars = 2
+		n = 2
 	default:
-		bars = 1
+		n = 1
 	}
-	filled := strings.Repeat("█", bars)
-	empty := strings.Repeat("░", 5-bars)
+	filled := strings.Repeat("█", n)
+	empty := strings.Repeat("░", 5-n)
 
-	var color lipgloss.Color
-	switch bars {
+	var c lipgloss.Color
+	switch n {
 	case 5, 4:
-		color = clrGreen
+		c = cGreen
 	case 3:
-		color = clrYellow
+		c = cYellow
 	case 2:
-		color = clrOrange
+		c = cOrange
 	default:
-		color = clrRed
+		c = cRed
 	}
-	return lipgloss.NewStyle().Foreground(color).Render(filled + empty)
+	return lipgloss.NewStyle().Foreground(c).Render(filled + empty)
 }
 
-func encBadge(enc string) string {
+func encTag(enc string) string {
 	switch enc {
 	case "OPN":
-		return styleBadgeOPN.Render("OPN ")
+		return sEncOPN.Render("OPN")
 	case "WEP":
-		return styleBadgeWEP.Render("WEP ")
+		return sEncWEP.Render("WEP")
 	case "WPA":
-		return styleBadgeWPA.Render("WPA ")
+		return sEncWPA.Render("WPA")
 	case "WPA2":
-		return styleBadgeWPA2.Render("WPA2")
+		return sEncWPA2.Render("WPA2")
 	case "WPA3":
-		return styleBadgeWPA3.Render("WPA3")
+		return sEncWPA3.Render("WPA3")
 	default:
-		return styleMuted.Render("????")
-	}
-}
-
-func encBadgeFull(enc, cipher string) string {
-	badge := encBadge(enc)
-	if cipher != "" {
-		badge += styleMuted.Render(" / "+cipher)
-	}
-	return badge
-}
-
-func encStyle(enc string) lipgloss.Style {
-	switch enc {
-	case "OPN":
-		return lipgloss.NewStyle().Foreground(clrRed)
-	case "WEP":
-		return lipgloss.NewStyle().Foreground(clrOrange)
-	case "WPA":
-		return lipgloss.NewStyle().Foreground(clrYellow)
-	default:
-		return lipgloss.NewStyle().Foreground(clrText)
+		return sMuted.Render("???")
 	}
 }
 
@@ -580,14 +539,14 @@ func orDash(s string) string {
 	return s
 }
 
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
 //  Entry point
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
 
 func Run(iface string) error {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
-	sp.Style = lipgloss.NewStyle().Foreground(clrAccent)
+	sp.Style = lipgloss.NewStyle().Foreground(cAccent)
 
 	mon := monitor.New(iface)
 	sc := scanner.New(mon.MonitorIface())
@@ -599,7 +558,6 @@ func Run(iface string) error {
 		networks:   []scanner.Network{},
 		clients:    []scanner.Client{},
 		status:     "Initializing…",
-		statusOK:   true,
 		lastUpdate: time.Now(),
 		spinner:    sp,
 	}
