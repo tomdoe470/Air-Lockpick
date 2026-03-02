@@ -2,8 +2,6 @@ package scanner
 
 import (
 	"encoding/binary"
-	"fmt"
-	"net"
 	"strings"
 	"sync"
 	"time"
@@ -11,6 +9,8 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
+
+	"github.com/auditteam/wifiaudit/internal/oui"
 )
 
 // Network represents a discovered access point
@@ -162,7 +162,7 @@ func (s *Scanner) processBeacon(packet gopacket.Packet, dot11 *layers.Dot11) {
 		network = &Network{
 			BSSID:     bssid,
 			FirstSeen: time.Now(),
-			Vendor:    lookupVendor(bssid),
+			Vendor:    oui.Lookup(bssid),
 		}
 		s.networks[bssid] = network
 	}
@@ -204,7 +204,7 @@ func (s *Scanner) processProbeRequest(packet gopacket.Packet, dot11 *layers.Dot1
 	if !exists {
 		client = &Client{
 			MAC:       clientMAC,
-			Vendor:    lookupVendor(clientMAC),
+			Vendor:    oui.Lookup(clientMAC),
 			FirstSeen: time.Now(),
 		}
 		s.clients[clientMAC] = client
@@ -232,7 +232,7 @@ func (s *Scanner) processDataFrame(dot11 *layers.Dot11) {
 			client = &Client{
 				MAC:       src,
 				BSSID:     bssid,
-				Vendor:    lookupVendor(src),
+				Vendor:    oui.Lookup(src),
 				FirstSeen: time.Now(),
 			}
 			s.clients[src] = client
@@ -269,7 +269,7 @@ func (s *Scanner) processClientPacket(packet gopacket.Packet, bssid string) {
 		client = &Client{
 			MAC:       src,
 			BSSID:     bssid,
-			Vendor:    lookupVendor(src),
+			Vendor:    oui.Lookup(src),
 			FirstSeen: time.Now(),
 		}
 		s.clients[src] = client
@@ -296,13 +296,20 @@ func (s *Scanner) Stop() {
 	}
 }
 
-// GetNetworks returns a slice of discovered networks
+// GetNetworks returns a slice of discovered networks with their associated clients populated.
 func (s *Scanner) GetNetworks() []Network {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	result := make([]Network, 0, len(s.networks))
 	for _, n := range s.networks {
-		result = append(result, *n)
+		network := *n
+		network.Clients = nil
+		for _, c := range s.clients {
+			if strings.EqualFold(c.BSSID, n.BSSID) {
+				network.Clients = append(network.Clients, *c)
+			}
+		}
+		result = append(result, network)
 	}
 	return result
 }
@@ -380,47 +387,3 @@ func parseRSN(network *Network, data []byte) {
 	}
 }
 
-// lookupVendor does a basic OUI lookup from the first 3 bytes of a MAC
-func lookupVendor(mac string) string {
-	parts := strings.Split(mac, ":")
-	if len(parts) < 3 {
-		return ""
-	}
-	oui := strings.ToUpper(strings.Join(parts[:3], ""))
-
-	// Common OUI prefixes (abbreviated list - production would use full OUI DB)
-	vendors := map[string]string{
-		"001A2B": "Cisco",
-		"001B63": "Apple",
-		"001BB9": "Apple",
-		"001D7E": "Cisco-Linksys",
-		"002272": "American Micro",
-		"00237A": "Samsung",
-		"0024B2": "Netgear",
-		"002655": "Samsung",
-		"00E0FC": "Huawei",
-		"001CF0": "Apple",
-		"34363B": "Apple",
-		"3C15C2": "Apple",
-		"686F2D": "Tp-Link",
-		"A4C361": "Netgear",
-		"B00CD1": "Tp-Link",
-		"C83A35": "Asus",
-		"D850E6": "Asus",
-		"E894F6": "Xiaomi",
-		"F4F26D": "Apple",
-		"FCFBFB": "Ubiquiti",
-	}
-
-	// Try to parse MAC address bytes for OUI lookup
-	hw, err := net.ParseMAC(mac)
-	if err != nil || len(hw) < 3 {
-		return ""
-	}
-	ouiKey := fmt.Sprintf("%02X%02X%02X", hw[0], hw[1], hw[2])
-
-	if vendor, ok := vendors[ouiKey]; ok {
-		return vendor
-	}
-	return ""
-}
