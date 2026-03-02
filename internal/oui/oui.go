@@ -156,7 +156,7 @@ func builtinDB() map[string]string {
 		"28CDC1": "Raspberry Pi",
 		// Realtek (cheap adapters, dongles)
 		"001017": "Realtek", "00E04C": "Realtek", "00601A": "Realtek",
-		"001195": "Realtek", "00904C": "Realtek",
+		"001195": "Realtek",
 		// ZTE
 		"002A5E": "ZTE", "040E3C": "ZTE", "2419B7": "ZTE",
 		"4C09D4": "ZTE", "607B58": "ZTE", "7C39C4": "ZTE",
