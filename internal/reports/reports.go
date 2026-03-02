@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/auditteam/wifiaudit/internal/session"
@@ -62,7 +63,9 @@ func (g *Generator) GenerateJSON(sess *session.Session) (string, error) {
 
 // GenerateHTML produces an HTML report
 func (g *Generator) GenerateHTML(sess *session.Session) (string, error) {
-	tmpl := template.Must(template.New("report").Parse(htmlTemplate))
+	tmpl := template.Must(template.New("report").Funcs(template.FuncMap{
+		"lower": strings.ToLower,
+	}).Parse(htmlTemplate))
 
 	type TemplateData struct {
 		GeneratedAt  string

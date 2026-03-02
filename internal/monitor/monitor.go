@@ -122,8 +122,10 @@ func (m *Manager) StartChannelHop(intervalMs int) error {
 
 	m.hopping = true
 	ticker := time.NewTicker(time.Duration(intervalMs) * time.Millisecond)
+	done := make(chan struct{})
 
 	go func() {
+		defer close(done)
 		idx := 0
 		for {
 			select {
@@ -137,8 +139,8 @@ func (m *Manager) StartChannelHop(intervalMs int) error {
 		}
 	}()
 
-	// Block until interrupted
-	<-m.stopHop
+	// Block until the goroutine exits via StopChannelHop
+	<-done
 	return nil
 }
 
